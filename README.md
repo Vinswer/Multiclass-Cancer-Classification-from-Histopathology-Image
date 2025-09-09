@@ -34,13 +34,13 @@ Histopathology-Cancer-Classification/
 ├── grad.py # Grad-CAM visualization implementation
 ├── requirements.txt # Dependency list
 ├── results/ # Training results and model storage
-│ ├── best_model.pth # Best performing model
-│ ├── training_history.png # Training curve graph
-│ └──  gradcam_analysis.png # Grad-CAM analysis results
+    ├── best_model.pth # Best performing model
+    ├── training_history.png # Training curve graph
+    └──  gradcam_analysis.png # Grad-CAM analysis results
 └── data/ # Data Directory
-├── train.zip/ # Training Data
-├── test.zip/ # Test Data
-└── sample_submission.csv # Image name and label
+    ├── train.zip/ # Training Data
+    ├── test.zip/ # Test Data
+    └── sample_submission.csv # Image name and label
 
 ```
 
