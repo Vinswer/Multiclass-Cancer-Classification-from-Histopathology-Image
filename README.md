@@ -1,0 +1,2 @@
+# Multiclass-Cancer-Classification-from-Histopathology-Image
+This project used the PatchCamelyon dataset to develop a deep learning-based automated histopathology cancer detection system, designed to assist pathologists in cancer diagnosis. It implemented a complete pipeline from medical image preprocessing to deep learning classification and interpretable AI, and output clinical-grade performance metrics.
