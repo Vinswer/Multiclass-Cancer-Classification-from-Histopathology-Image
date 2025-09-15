@@ -1,13 +1,14 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-from sklearn.metrics import (roc_auc_score, confusion_matrix, classification_report,
-                           roc_curve, auc, precision_score, recall_score, f1_score)
+from sklearn.metrics import (
+    roc_auc_score, confusion_matrix, roc_curve, f1_score
+)
 import seaborn as sns
 
 class MedicalEvaluator:
     """
-    Comprehensive medical evaluation metrics for clinical validation.
+    Simple evaluator for binary medical classification.
     """
 
     def __init__(self):
@@ -19,181 +20,181 @@ class MedicalEvaluator:
         self.all_probabilities = []
 
     def update(self, predictions, targets, probabilities):
-        """Update with batch results."""
-        self.all_predictions.extend(predictions.cpu().numpy())
-        self.all_targets.extend(targets.cpu().numpy())
-        self.all_probabilities.extend(probabilities.cpu().numpy())
+        """Add a batch of results."""
+        # to numpy
+        preds = predictions.detach().cpu().numpy()
+        targs = targets.detach().cpu().numpy()
+        probs = probabilities.detach().cpu().numpy()
+
+        if probs.ndim == 2 and probs.shape[1] == 2:
+            probs = probs[:, 1]
+        else:
+            probs = probs.ravel()
+
+        self.all_predictions.extend(preds)
+        self.all_targets.extend(targs)
+        self.all_probabilities.extend(probs)
 
     def calculate_metrics(self):
-        """Calculate comprehensive medical metrics."""
-        y_true = np.array(self.all_targets)
-        y_pred = np.array(self.all_predictions)
-        y_prob = np.array(self.all_probabilities)
+        """Compute common metrics."""
+        y_true = np.asarray(self.all_targets).ravel()
+        y_pred = np.asarray(self.all_predictions).ravel()
+        y_prob = np.asarray(self.all_probabilities).ravel()
 
-        # Confusion matrix components
-        cm = confusion_matrix(y_true, y_pred)
-        tn, fp, fn, tp = cm.ravel()
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+        if cm.size == 4:
+            tn, fp, fn, tp = cm.ravel()
+        else:
+            tn = fp = fn = tp = 0
+            if cm.shape == (1, 1):
+                if np.unique(y_true)[0] == 0:
+                    tn = cm[0, 0]
+                else:
+                    tp = cm[0, 0]
+            elif cm.shape == (2, 2):
+                tn, fp, fn, tp = cm.ravel()
 
-        # Clinical metrics
-        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # Recall
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # recall
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # PPV
-        npv = tn / (tn + fn) if (tn + fn) > 0 else 0.0  # NPV
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        npv = tn / (tn + fn) if (tn + fn) > 0 else 0.0
+        denom = tp + tn + fp + fn
+        accuracy = (tp + tn) / denom if denom > 0 else 0.0
 
-        # F1 score and AUC
-        f1 = f1_score(y_true, y_pred)
-        auc_roc = roc_auc_score(y_true, y_prob)
+        try:
+            f1 = f1_score(y_true, y_pred)
+        except Exception:
+            f1 = 0.0
 
-        # Clinical interpretation
+        try:
+            auc_roc = roc_auc_score(y_true, y_prob)
+        except Exception:
+            auc_roc = 0.0
+
         metrics = {
-            'accuracy': accuracy,
-            'sensitivity': sensitivity,
-            'specificity': specificity,
-            'precision': precision,
-            'npv': npv,
-            'f1_score': f1,
-            'auc_roc': auc_roc,
-            'confusion_matrix': cm,
-            'tp': tp, 'tn': tn, 'fp': fp, 'fn': fn
+            "accuracy": accuracy,
+            "sensitivity": sensitivity,
+            "specificity": specificity,
+            "precision": precision,
+            "npv": npv,
+            "f1_score": f1,
+            "auc_roc": auc_roc,
+            "confusion_matrix": cm,
+            "tp": tp, "tn": tn, "fp": fp, "fn": fn
         }
-
         return metrics
 
     def plot_comprehensive_results(self, metrics, save_path=None):
-        """Create comprehensive visualization of medical metrics."""
+        """Plot confusion matrix, bars, ROC and a short text summary."""
         fig = plt.figure(figsize=(16, 12))
 
-        # Confusion Matrix
+        # 1) Confusion Matrix
         plt.subplot(2, 3, 1)
-        sns.heatmap(metrics['confusion_matrix'], annot=True, fmt='d',
-                    cmap='Blues', cbar=True,
-                    xticklabels=['Benign', 'Malignant'],
-                    yticklabels=['Benign', 'Malignant'])
-        plt.title('Confusion Matrix')
-        plt.ylabel('True Label')
-        plt.xlabel('Predicted Label')
+        sns.heatmap(
+            metrics["confusion_matrix"], annot=True, fmt="d",
+            cmap="Blues", cbar=True,
+            xticklabels=["Benign", "Malignant"],
+            yticklabels=["Benign", "Malignant"]
+        )
+        plt.title("Confusion Matrix")
+        plt.ylabel("True")
+        plt.xlabel("Pred")
 
-        # Clinical Metrics
+        # 2) Clinical Metrics (bar)
         plt.subplot(2, 3, 2)
-        clinical_metrics = ['Sensitivity', 'Specificity', 'Precision', 'NPV']
-        values = [metrics['sensitivity'], metrics['specificity'],
-                  metrics['precision'], metrics['npv']]
-        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
-
-        bars = plt.bar(clinical_metrics, values, color=colors)
+        names = ["Sensitivity", "Specificity", "Precision", "NPV"]
+        vals = [
+            metrics["sensitivity"], metrics["specificity"],
+            metrics["precision"], metrics["npv"]
+        ]
+        colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4"]
+        bars = plt.bar(names, vals, color=colors)
         plt.ylim(0, 1)
-        plt.title('Clinical Performance Metrics')
-        plt.xticks(rotation=45)
+        plt.title("Clinical Metrics")
+        plt.xticks(rotation=30)
+        for b, v in zip(bars, vals):
+            plt.text(b.get_x() + b.get_width()/2, b.get_height() + 0.01,
+                     f"{v:.3f}", ha="center", va="bottom")
 
-        # Add value labels
-        for bar, value in zip(bars, values):
-            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                     f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
-
-        # ROC Curve
+        # 3) ROC Curve
         plt.subplot(2, 3, 3)
-        fpr, tpr, _ = roc_curve(self.all_targets, self.all_probabilities)
-        plt.plot(fpr, tpr, color='darkorange', lw=2,
-                 label=f'ROC Curve (AUC = {metrics["auc_roc"]:.3f})')
-        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', alpha=0.5)
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate (1-Specificity)')
-        plt.ylabel('True Positive Rate (Sensitivity)')
-        plt.title('ROC Curve')
+        y_true = np.asarray(self.all_targets).ravel()
+        y_prob = np.asarray(self.all_probabilities).ravel()
+        try:
+            fpr, tpr, _ = roc_curve(y_true, y_prob)
+            plt.plot(fpr, tpr, lw=2, label=f"AUC = {metrics['auc_roc']:.3f}")
+        except Exception:
+            plt.plot([0, 1], [0, 1], lw=2, linestyle="--", alpha=0.5, label="ROC N/A")
+        plt.plot([0, 1], [0, 1], lw=1, linestyle="--", alpha=0.5)
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.xlabel("FPR (1 - Specificity)")
+        plt.ylabel("TPR (Sensitivity)")
+        plt.title("ROC")
         plt.legend(loc="lower right")
         plt.grid(True, alpha=0.3)
 
-        # Overall Performance
+        # 4) Overall Metrics (bar)
         plt.subplot(2, 3, 4)
-        overall_metrics = ['Accuracy', 'F1-Score', 'AUC-ROC']
-        overall_values = [metrics['accuracy'], metrics['f1_score'], metrics['auc_roc']]
-        colors = ['#9B59B6', '#E67E22', '#E74C3C']
-
-        bars = plt.bar(overall_metrics, overall_values, color=colors)
+        overall_names = ["Accuracy", "F1", "AUC"]
+        overall_vals = [
+            metrics["accuracy"], metrics["f1_score"], metrics["auc_roc"]
+        ]
+        colors2 = ["#9B59B6", "#E67E22", "#E74C3C"]
+        bars2 = plt.bar(overall_names, overall_vals, color=colors2)
         plt.ylim(0, 1)
-        plt.title('Overall Model Performance')
+        plt.title("Overall")
+        for b, v in zip(bars2, overall_vals):
+            plt.text(b.get_x() + b.get_width()/2, b.get_height() + 0.01,
+                     f"{v:.3f}", ha="center", va="bottom")
 
-        for bar, value in zip(bars, overall_values):
-            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                     f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
-
-        # Clinical Interpretation
+        # 5) Short Notes
         plt.subplot(2, 3, 5)
-        plt.axis('off')
-
-        # Performance assessment
-        if metrics['auc_roc'] >= 0.95:
-            performance_level = "EXCELLENT"
-            color = "green"
-        elif metrics['auc_roc'] >= 0.85:
-            performance_level = "GOOD"
-            color = "orange"
+        plt.axis("off")
+        auc_val = metrics["auc_roc"]
+        if auc_val >= 0.95:
+            level = "Excellent"
+        elif auc_val >= 0.85:
+            level = "Good"
         else:
-            performance_level = "MODERATE"
-            color = "red"
+            level = "OK"
 
-        interpretation = f"""
-Clinical Performance Summary:
+        notes = (
+            f"Notes:\n"
+            f"- Sensitivity: {metrics['sensitivity']:.3f}\n"
+            f"- Specificity: {metrics['specificity']:.3f}\n"
+            f"- Precision:   {metrics['precision']:.3f}\n"
+            f"- AUC:         {auc_val:.3f}\n"
+            f"- Level:       {level}"
+        )
+        plt.text(0.05, 0.95, notes, transform=plt.gca().transAxes,
+                 fontsize=10, va="top",
+                 bbox=dict(boxstyle="round,pad=0.3", facecolor="#eeeeee", alpha=0.8))
 
-• Sensitivity: {metrics['sensitivity']:.3f}
-  (Malignant case detection rate)
-
-• Specificity: {metrics['specificity']:.3f}
-  (Benign case identification rate)
-
-• Precision (PPV): {metrics['precision']:.3f}
-  (Malignant prediction accuracy)
-
-• AUC-ROC: {metrics['auc_roc']:.3f}
-  (Overall discriminative ability)
-
-• Performance Level: {performance_level}
-
-Clinical Significance:
-{performance_level.title()} performance for
-pathologist-assisted diagnosis
-        """
-
-        plt.text(0.05, 0.95, interpretation, transform=plt.gca().transAxes,
-                 fontsize=10, verticalalignment='top', fontfamily='monospace',
-                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
-
-        # Diagnostic Statistics
+        # 6) Counts & Error Rates
         plt.subplot(2, 3, 6)
-        plt.axis('off')
+        plt.axis("off")
+        tp, tn, fp, fn = metrics["tp"], metrics["tn"], metrics["fp"], metrics["fn"]
+        total = tp + tn + fp + fn
+        fp_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+        fn_rate = fn / (fn + tp) if (fn + tp) > 0 else 0.0
 
-        stats_text = f"""
-Diagnostic Statistics:
+        stats = (
+            f"Counts:\n"
+            f"TP: {tp}  TN: {tn}  FP: {fp}  FN: {fn}\n"
+            f"Total: {total}\n\n"
+            f"Error Rates:\n"
+            f"FP Rate: {fp_rate:.3f}\n"
+            f"FN Rate: {fn_rate:.3f}"
+        )
+        plt.text(0.05, 0.95, stats, transform=plt.gca().transAxes,
+                 fontsize=10, va="top",
+                 bbox=dict(boxstyle="round,pad=0.3", facecolor="#fff6cc", alpha=0.8))
 
-True Positives (TP): {metrics['tp']}
-True Negatives (TN): {metrics['tn']}
-False Positives (FP): {metrics['fp']}
-False Negatives (FN): {metrics['fn']}
-
-Total Samples: {sum([metrics['tp'], metrics['tn'], metrics['fp'], metrics['fn']])}
-
-Error Analysis:
-• Type I Error (FP Rate): {metrics['fp'] / (metrics['fp'] + metrics['tn']):.3f}
-• Type II Error (FN Rate): {metrics['fn'] / (metrics['fn'] + metrics['tp']):.3f}
-
-Clinical Impact:
-• Missed Cancers: {metrics['fn']} cases
-• False Alarms: {metrics['fp']} cases
-        """
-
-        plt.text(0.05, 0.95, stats_text, transform=plt.gca().transAxes,
-                 fontsize=10, verticalalignment='top', fontfamily='monospace',
-                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.7))
-
-        plt.suptitle('Medical AI Performance Evaluation Report',
-                     fontsize=16, fontweight='bold', y=0.98)
+        plt.suptitle("Model Eval (Binary)", fontsize=16, fontweight="bold", y=0.98)
         plt.tight_layout()
 
         if save_path:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
-
-
